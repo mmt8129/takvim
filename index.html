@@ -8,9 +8,12 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>TAKVİM GÜN TAKİP</title>
     
-    <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     
     <style>
         * {
@@ -32,7 +35,6 @@
             padding-bottom: 80px;
         }
         
-        /* Sabit Banner */
         .banner {
             position: fixed;
             top: 0;
@@ -49,14 +51,12 @@
             letter-spacing: 2px;
         }
         
-        /* Ana İçerik */
         .content {
             margin-top: 60px;
             padding: 10px;
             padding-bottom: 100px;
         }
         
-        /* Yıl Satırı */
         .year-row {
             display: flex;
             align-items: center;
@@ -74,7 +74,6 @@
             color: #333;
         }
         
-        /* Kare Kutular */
         .boxes-container {
             display: flex;
             gap: 8px;
@@ -106,11 +105,19 @@
             color: white;
         }
         
+        .day-box.syncing {
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+        
         .day-box:active {
             transform: scale(0.95);
         }
         
-        /* Ana Modal */
         .modal-overlay {
             display: none;
             position: fixed;
@@ -202,7 +209,6 @@
             height: 80px;
         }
         
-        /* Butonlar */
         .buttons-row {
             display: flex;
             gap: 10px;
@@ -247,7 +253,6 @@
             opacity: 0.9;
         }
         
-        /* Silme Onay Modal'ı */
         .confirm-overlay {
             display: none;
             position: fixed;
@@ -359,7 +364,6 @@
             transform: scale(0.95);
         }
         
-        /* İstatistikler */
         .stats {
             position: fixed;
             bottom: 0;
@@ -395,7 +399,6 @@
         .stat-tutulmayan { color: #f44336; }
         .stat-toplam { color: #2196f3; }
         
-        /* Offline Bildirimi */
         .offline-badge {
             display: none;
             position: fixed;
@@ -416,13 +419,10 @@
             display: block;
         }
         
-        /* Senkronizasyon Durumu */
         .sync-status {
             position: fixed;
             top: 60px;
             right: 10px;
-            background: #4caf50;
-            color: white;
             padding: 6px 12px;
             border-radius: 15px;
             font-size: 11px;
@@ -435,23 +435,30 @@
             display: block;
         }
         
+        .sync-status.synced {
+            background: #4caf50;
+            color: white;
+        }
+        
         .sync-status.syncing {
             background: #ff9800;
+            color: white;
+        }
+        
+        .sync-status.error {
+            background: #f44336;
+            color: white;
         }
     </style>
 </head>
 <body>
-    <!-- Offline Bildirimi -->
     <div class="offline-badge" id="offlineBadge">📴 Çevrimdışı Mod</div>
     <div class="sync-status" id="syncStatus">☁️ Senkronize edildi</div>
     
-    <!-- Sabit Banner -->
-    <div class="banner">TAKVİM</div>
+    <div class="banner">☪️ TAKVİM</div>
     
-    <!-- Ana İçerik -->
     <div class="content" id="content"></div>
     
-    <!-- Ana Modal -->
     <div class="modal-overlay" id="modal">
         <div class="modal">
             <div class="modal-banner" id="modalTitle">2018 - 4. Gün</div>
@@ -477,7 +484,6 @@
         </div>
     </div>
     
-    <!-- Silme Onay Modal'ı -->
     <div class="confirm-overlay" id="confirmModal">
         <div class="confirm-modal">
             <div class="confirm-header">
@@ -499,7 +505,6 @@
         </div>
     </div>
     
-    <!-- İstatistikler -->
     <div class="stats">
         <div class="stat-item">
             <span class="stat-value stat-tutulan" id="statTutulan">0</span>
@@ -516,56 +521,213 @@
     </div>
 
     <script>
-        // PWA Service Worker Kayıt
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('sw.js')
-                    .then(registration => {
-                        console.log('SW registered:', registration);
-                    })
-                    .catch(error => {
-                        console.log('SW registration failed:', error);
-                    });
-            });
-        }
+        // Firebase Config
+        const firebaseConfig = {
+            databaseURL: "https://project-580b3319-a2b0-40ef-80b-default-rtdb.firebaseio.com/"
+        };
         
+        // Firebase Init
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const fastingRef = database.ref('fastingData');
+        
+        // Global Değişkenler
         let fastingData = {};
+        let pendingSync = [];
         let currentYear = null;
         let currentDay = null;
+        let isOnline = navigator.onLine;
         
         const gunler = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
         const aylar = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
                        'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
         
-        function loadData() {
-            const saved = localStorage.getItem('fastingData');
-            if (saved) fastingData = JSON.parse(saved);
+        // Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(reg => console.log('SW registered'))
+                    .catch(err => console.log('SW error:', err));
+            });
         }
         
-        function saveToStorage() {
-            localStorage.setItem('fastingData', JSON.stringify(fastingData));
-        }
-        
-        window.onload = function() {
-            loadData();
-            renderYears();
-            updateStats();
-            document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+        // Online/Offline Dinleyiciler
+        window.addEventListener('online', () => {
+            isOnline = true;
             updateOnlineStatus();
-        };
+            syncPendingData();
+        });
         
-        // Çevrimdışı durum kontrolü
+        window.addEventListener('offline', () => {
+            isOnline = false;
+            updateOnlineStatus();
+        });
+        
         function updateOnlineStatus() {
-            const offlineBadge = document.getElementById('offlineBadge');
-            if (!navigator.onLine) {
-                offlineBadge.classList.add('show');
+            const badge = document.getElementById('offlineBadge');
+            const status = document.getElementById('syncStatus');
+            
+            if (!isOnline) {
+                badge.classList.add('show');
+                status.className = 'sync-status error show';
+                status.textContent = '📴 Çevrimdışı';
             } else {
-                offlineBadge.classList.remove('show');
+                badge.classList.remove('show');
+                status.className = 'sync-status synced show';
+                status.textContent = '☁️ Bağlı';
+                setTimeout(() => status.classList.remove('show'), 3000);
             }
         }
         
-        window.addEventListener('online', updateOnlineStatus);
-        window.addEventListener('offline', updateOnlineStatus);
+        // LocalStorage İşlemleri
+        function loadLocalData() {
+            const saved = localStorage.getItem('fastingData');
+            const pending = localStorage.getItem('pendingSync');
+            if (saved) fastingData = JSON.parse(saved);
+            if (pending) pendingSync = JSON.parse(pending);
+        }
+        
+        function saveLocalData() {
+            localStorage.setItem('fastingData', JSON.stringify(fastingData));
+            localStorage.setItem('pendingSync', JSON.stringify(pendingSync));
+        }
+        
+        // Firebase İşlemleri
+        function loadFirebaseData() {
+            if (!isOnline) return;
+            
+            showSyncStatus('syncing', '🔄 Yükleniyor...');
+            
+            fastingRef.once('value')
+                .then(snapshot => {
+                    const firebaseData = snapshot.val() || {};
+                    
+                    // Firebase'den gelen veriyi local ile birleştir
+                    // Eğer local'de daha yeni veri varsa onu koru
+                    Object.keys(firebaseData).forEach(key => {
+                        if (!fastingData[key] || 
+                            new Date(firebaseData[key].timestamp) > new Date(fastingData[key].timestamp)) {
+                            fastingData[key] = firebaseData[key];
+                        }
+                    });
+                    
+                    saveLocalData();
+                    renderYears();
+                    updateStats();
+                    showSyncStatus('synced', '✓ Güncellendi');
+                })
+                .catch(err => {
+                    console.error('Firebase load error:', err);
+                    showSyncStatus('error', '✗ Hata');
+                });
+        }
+        
+        function saveToFirebase(key, data) {
+            if (!isOnline) {
+                addToPendingSync('save', key, data);
+                return Promise.resolve();
+            }
+            
+            return fastingRef.child(key).set(data)
+                .then(() => {
+                    removeFromPendingSync(key);
+                    showSyncStatus('synced', '✓ Kaydedildi');
+                })
+                .catch(err => {
+                    console.error('Firebase save error:', err);
+                    addToPendingSync('save', key, data);
+                    showSyncStatus('error', '✗ Kayıt Hatası');
+                });
+        }
+        
+        function deleteFromFirebase(key) {
+            if (!isOnline) {
+                addToPendingSync('delete', key, null);
+                return Promise.resolve();
+            }
+            
+            return fastingRef.child(key).remove()
+                .then(() => {
+                    removeFromPendingSync(key);
+                    showSyncStatus('synced', '✓ Silindi');
+                })
+                .catch(err => {
+                    console.error('Firebase delete error:', err);
+                    addToPendingSync('delete', key, null);
+                    showSyncStatus('error', '✗ Silme Hatası');
+                });
+        }
+        
+        // Senkronizasyon Kuyruğu
+        function addToPendingSync(action, key, data) {
+            const existingIndex = pendingSync.findIndex(item => item.key === key);
+            if (existingIndex > -1) {
+                pendingSync[existingIndex] = { action, key, data, timestamp: Date.now() };
+            } else {
+                pendingSync.push({ action, key, data, timestamp: Date.now() });
+            }
+            saveLocalData();
+        }
+        
+        function removeFromPendingSync(key) {
+            pendingSync = pendingSync.filter(item => item.key !== key);
+            saveLocalData();
+        }
+        
+        async function syncPendingData() {
+            if (!isOnline || pendingSync.length === 0) return;
+            
+            showSyncStatus('syncing', `🔄 ${pendingSync.length} bekleyen...`);
+            
+            const toSync = [...pendingSync];
+            pendingSync = [];
+            saveLocalData();
+            
+            for (const item of toSync) {
+                try {
+                    if (item.action === 'save') {
+                        await fastingRef.child(item.key).set(item.data);
+                    } else if (item.action === 'delete') {
+                        await fastingRef.child(item.key).remove();
+                    }
+                } catch (err) {
+                    console.error('Sync error:', err);
+                    pendingSync.push(item);
+                    saveLocalData();
+                }
+            }
+            
+            const remaining = pendingSync.length;
+            if (remaining === 0) {
+                showSyncStatus('synced', '✓ Senkronize');
+            } else {
+                showSyncStatus('error', `✗ ${remaining} hata`);
+            }
+        }
+        
+        function showSyncStatus(type, message) {
+            const status = document.getElementById('syncStatus');
+            status.className = `sync-status ${type} show`;
+            status.textContent = message;
+            
+            if (type !== 'syncing') {
+                setTimeout(() => status.classList.remove('show'), 3000);
+            }
+        }
+        
+        // UI Fonksiyonları
+        window.onload = function() {
+            loadLocalData();
+            renderYears();
+            updateStats();
+            updateOnlineStatus();
+            
+            if (isOnline) {
+                loadFirebaseData();
+            }
+            
+            document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+        };
         
         function renderYears() {
             const content = document.getElementById('content');
@@ -586,12 +748,18 @@
                     const key = `${year}-${day}`;
                     const box = document.createElement('div');
                     box.className = 'day-box';
+                    box.id = `box-${key}`;
                     
                     if (fastingData[key]) {
                         box.classList.add('filled');
                         box.textContent = day;
                     } else {
                         box.textContent = day;
+                    }
+                    
+                    // Eğer bu item senkronizasyon bekliyorsa
+                    if (pendingSync.some(item => item.key === key)) {
+                        box.classList.add('syncing');
                     }
                     
                     box.onclick = () => openModal(year, day);
@@ -648,7 +816,7 @@
             currentDay = null;
         }
         
-        function saveData() {
+        async function saveData() {
             const date = document.getElementById('dateInput').value;
             const note = document.getElementById('noteInput').value.trim();
             
@@ -658,13 +826,21 @@
             }
             
             const key = `${currentYear}-${currentDay}`;
-            fastingData[key] = {
+            const data = {
                 date: date,
                 note: note,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                year: currentYear,
+                day: currentDay
             };
             
-            saveToStorage();
+            // Önce local'e kaydet
+            fastingData[key] = data;
+            saveLocalData();
+            
+            // Sonra Firebase'e kaydet (offline ise kuyruğa alınır)
+            await saveToFirebase(key, data);
+            
             renderYears();
             updateStats();
             closeModal();
@@ -694,10 +870,16 @@
             document.getElementById('confirmModal').classList.remove('active');
         }
         
-        function confirmDelete() {
+        async function confirmDelete() {
             const key = `${currentYear}-${currentDay}`;
+            
+            // Önce local'den sil
             delete fastingData[key];
-            saveToStorage();
+            saveLocalData();
+            
+            // Sonra Firebase'den sil (offline ise kuyruğa alınır)
+            await deleteFromFirebase(key);
+            
             renderYears();
             updateStats();
             hideDeleteConfirm();
