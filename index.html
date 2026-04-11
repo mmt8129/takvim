@@ -105,15 +105,6 @@
             color: white;
         }
         
-        .day-box.syncing {
-            animation: pulse 1.5s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
-        }
-        
         .day-box:active {
             transform: scale(0.95);
         }
@@ -531,9 +522,8 @@
         const database = firebase.database();
         const fastingRef = database.ref('fastingData');
         
-        // Global Değişkenler
+        // Global Değişkenler - LocalStorage tamamen kaldırıldı
         let fastingData = {};
-        let pendingSync = [];
         let currentYear = null;
         let currentDay = null;
         let isOnline = navigator.onLine;
@@ -555,7 +545,7 @@
         window.addEventListener('online', () => {
             isOnline = true;
             updateOnlineStatus();
-            syncPendingData();
+            loadFirebaseData();
         });
         
         window.addEventListener('offline', () => {
@@ -579,20 +569,7 @@
             }
         }
         
-        // LocalStorage İşlemleri
-        function loadLocalData() {
-            const saved = localStorage.getItem('fastingData');
-            const pending = localStorage.getItem('pendingSync');
-            if (saved) fastingData = JSON.parse(saved);
-            if (pending) pendingSync = JSON.parse(pending);
-        }
-        
-        function saveLocalData() {
-            localStorage.setItem('fastingData', JSON.stringify(fastingData));
-            localStorage.setItem('pendingSync', JSON.stringify(pendingSync));
-        }
-        
-        // Firebase İşlemleri
+        // Firebase İşlemleri - Sadece Firebase, LocalStorage yok
         function loadFirebaseData() {
             if (!isOnline) return;
             
@@ -600,109 +577,49 @@
             
             fastingRef.once('value')
                 .then(snapshot => {
-                    const firebaseData = snapshot.val() || {};
-                    
-                    // Firebase'den gelen veriyi local ile birleştir
-                    // Eğer local'de daha yeni veri varsa onu koru
-                    Object.keys(firebaseData).forEach(key => {
-                        if (!fastingData[key] || 
-                            new Date(firebaseData[key].timestamp) > new Date(fastingData[key].timestamp)) {
-                            fastingData[key] = firebaseData[key];
-                        }
-                    });
-                    
-                    saveLocalData();
+                    fastingData = snapshot.val() || {};
                     renderYears();
                     updateStats();
                     showSyncStatus('synced', '✓ Güncellendi');
                 })
                 .catch(err => {
                     console.error('Firebase load error:', err);
-                    showSyncStatus('error', '✗ Hata');
+                    showSyncStatus('error', '✗ Yükleme Hatası');
                 });
         }
         
         function saveToFirebase(key, data) {
             if (!isOnline) {
-                addToPendingSync('save', key, data);
-                return Promise.resolve();
+                alert('İnternet bağlantısı gerekli!');
+                return Promise.reject('Offline');
             }
             
             return fastingRef.child(key).set(data)
                 .then(() => {
-                    removeFromPendingSync(key);
                     showSyncStatus('synced', '✓ Kaydedildi');
                 })
                 .catch(err => {
                     console.error('Firebase save error:', err);
-                    addToPendingSync('save', key, data);
                     showSyncStatus('error', '✗ Kayıt Hatası');
+                    throw err;
                 });
         }
         
         function deleteFromFirebase(key) {
             if (!isOnline) {
-                addToPendingSync('delete', key, null);
-                return Promise.resolve();
+                alert('İnternet bağlantısı gerekli!');
+                return Promise.reject('Offline');
             }
             
             return fastingRef.child(key).remove()
                 .then(() => {
-                    removeFromPendingSync(key);
                     showSyncStatus('synced', '✓ Silindi');
                 })
                 .catch(err => {
                     console.error('Firebase delete error:', err);
-                    addToPendingSync('delete', key, null);
                     showSyncStatus('error', '✗ Silme Hatası');
+                    throw err;
                 });
-        }
-        
-        // Senkronizasyon Kuyruğu
-        function addToPendingSync(action, key, data) {
-            const existingIndex = pendingSync.findIndex(item => item.key === key);
-            if (existingIndex > -1) {
-                pendingSync[existingIndex] = { action, key, data, timestamp: Date.now() };
-            } else {
-                pendingSync.push({ action, key, data, timestamp: Date.now() });
-            }
-            saveLocalData();
-        }
-        
-        function removeFromPendingSync(key) {
-            pendingSync = pendingSync.filter(item => item.key !== key);
-            saveLocalData();
-        }
-        
-        async function syncPendingData() {
-            if (!isOnline || pendingSync.length === 0) return;
-            
-            showSyncStatus('syncing', `🔄 ${pendingSync.length} bekleyen...`);
-            
-            const toSync = [...pendingSync];
-            pendingSync = [];
-            saveLocalData();
-            
-            for (const item of toSync) {
-                try {
-                    if (item.action === 'save') {
-                        await fastingRef.child(item.key).set(item.data);
-                    } else if (item.action === 'delete') {
-                        await fastingRef.child(item.key).remove();
-                    }
-                } catch (err) {
-                    console.error('Sync error:', err);
-                    pendingSync.push(item);
-                    saveLocalData();
-                }
-            }
-            
-            const remaining = pendingSync.length;
-            if (remaining === 0) {
-                showSyncStatus('synced', '✓ Senkronize');
-            } else {
-                showSyncStatus('error', `✗ ${remaining} hata`);
-            }
         }
         
         function showSyncStatus(type, message) {
@@ -717,7 +634,6 @@
         
         // UI Fonksiyonları
         window.onload = function() {
-            loadLocalData();
             renderYears();
             updateStats();
             updateOnlineStatus();
@@ -734,7 +650,6 @@
             content.innerHTML = '';
             
             for (let year = 2026; year >= 2013; year--) {
-
                 const row = document.createElement('div');
                 row.className = 'year-row';
                 
@@ -758,11 +673,6 @@
                         box.textContent = day;
                     }
                     
-                    // Eğer bu item senkronizasyon bekliyorsa
-                    if (pendingSync.some(item => item.key === key)) {
-                        box.classList.add('syncing');
-                    }
-                    
                     box.onclick = () => openModal(year, day);
                     boxesContainer.appendChild(box);
                 }
@@ -774,6 +684,11 @@
         }
         
         function openModal(year, day) {
+            if (!isOnline) {
+                alert('İnternet bağlantısı gerekli!');
+                return;
+            }
+            
             currentYear = year;
             currentDay = day;
             const key = `${year}-${day}`;
@@ -818,6 +733,11 @@
         }
         
         async function saveData() {
+            if (!isOnline) {
+                alert('İnternet bağlantısı gerekli!');
+                return;
+            }
+            
             const date = document.getElementById('dateInput').value;
             const note = document.getElementById('noteInput').value.trim();
             
@@ -835,16 +755,15 @@
                 day: currentDay
             };
             
-            // Önce local'e kaydet
-            fastingData[key] = data;
-            saveLocalData();
-            
-            // Sonra Firebase'e kaydet (offline ise kuyruğa alınır)
-            await saveToFirebase(key, data);
-            
-            renderYears();
-            updateStats();
-            closeModal();
+            try {
+                await saveToFirebase(key, data);
+                fastingData[key] = data;
+                renderYears();
+                updateStats();
+                closeModal();
+            } catch (err) {
+                console.error('Save error:', err);
+            }
         }
         
         function showDeleteConfirm() {
@@ -872,19 +791,23 @@
         }
         
         async function confirmDelete() {
+            if (!isOnline) {
+                alert('İnternet bağlantısı gerekli!');
+                return;
+            }
+            
             const key = `${currentYear}-${currentDay}`;
             
-            // Önce local'den sil
-            delete fastingData[key];
-            saveLocalData();
-            
-            // Sonra Firebase'den sil (offline ise kuyruğa alınır)
-            await deleteFromFirebase(key);
-            
-            renderYears();
-            updateStats();
-            hideDeleteConfirm();
-            closeModal();
+            try {
+                await deleteFromFirebase(key);
+                delete fastingData[key];
+                renderYears();
+                updateStats();
+                hideDeleteConfirm();
+                closeModal();
+            } catch (err) {
+                console.error('Delete error:', err);
+            }
         }
         
         function updateStats() {
