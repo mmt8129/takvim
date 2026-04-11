@@ -1,8 +1,8 @@
 {
   "name": "Takvim Gün Takip",
   "short_name": "Takvim",
-  "description": "Tkvim Takip Uygulaması",
-  "start_url": "/",
+  "description": "Takvim Takip Uygulaması",
+  "start_url": "/takvim",
   "display": "standalone",
   "background_color": "#1565c0",
   "theme_color": "#1565c0",
