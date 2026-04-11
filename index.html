@@ -1,1 +1,726 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#1565c0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>TAKVİM GÜN TAKİP</title>
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        html, body {
+            height: 100%;
+            overflow-x: hidden;
+            touch-action: pan-y;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            padding-bottom: 80px;
+        }
+        
+        /* Sabit Banner */
+        .banner {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            color: white;
+            text-align: center;
+            padding: 15px;
+            font-size: 24px;
+            font-weight: bold;
+            z-index: 1000;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            letter-spacing: 2px;
+        }
+        
+        /* Ana İçerik */
+        .content {
+            margin-top: 60px;
+            padding: 10px;
+            padding-bottom: 100px;
+        }
+        
+        /* Yıl Satırı */
+        .year-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+            background: white;
+            padding: 10px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .year-label {
+            width: 60px;
+            font-weight: bold;
+            font-size: 18px;
+            color: #333;
+        }
+        
+        /* Kare Kutular */
+        .boxes-container {
+            display: flex;
+            gap: 8px;
+            flex: 1;
+            justify-content: space-around;
+        }
+        
+        .day-box {
+            width: 45px;
+            height: 45px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #ffebee;
+            color: #d32f2f;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            user-select: none;
+        }
+        
+        .day-box.filled {
+            background: #4caf50;
+            border-color: #2e7d32;
+            color: white;
+        }
+        
+        .day-box:active {
+            transform: scale(0.95);
+        }
+        
+        /* Ana Modal */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.7);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 400px;
+            max-height: 90vh;
+            overflow-y: auto;
+            animation: slideUp 0.3s ease;
+        }
+        
+        @keyframes slideUp {
+            from { transform: translateY(50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        
+        .modal-banner {
+            background: linear-gradient(135deg, #1e88e5 0%, #1565c0 100%);
+            color: white;
+            text-align: center;
+            padding: 18px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 20px 20px 0 0;
+            position: sticky;
+            top: 0;
+        }
+        
+        .modal-content {
+            padding: 20px;
+        }
+        
+        .date-display {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 16px;
+            color: #1565c0;
+            font-weight: 600;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        input[type="date"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="date"]:focus, textarea:focus {
+            border-color: #1e88e5;
+        }
+        
+        textarea {
+            resize: none;
+            height: 80px;
+        }
+        
+        /* Butonlar */
+        .buttons-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        
+        .btn {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-tamam {
+            background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.4);
+        }
+        
+        .btn-iptal {
+            background: linear-gradient(135deg, #2196f3 0%, #1565c0 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(33, 150, 243, 0.4);
+        }
+        
+        .btn-sil {
+            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.4);
+            margin-top: 10px;
+            width: 100%;
+        }
+        
+        .btn:active {
+            transform: scale(0.98);
+            opacity: 0.9;
+        }
+        
+        /* Silme Onay Modal'ı */
+        .confirm-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.8);
+            z-index: 3000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .confirm-overlay.active {
+            display: flex;
+        }
+        
+        .confirm-modal {
+            background: white;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 320px;
+            text-align: center;
+            animation: popIn 0.3s ease;
+            overflow: hidden;
+        }
+        
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        
+        .confirm-header {
+            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
+            padding: 25px;
+            color: white;
+        }
+        
+        .confirm-icon {
+            font-size: 50px;
+            margin-bottom: 10px;
+        }
+        
+        .confirm-title {
+            font-size: 22px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .confirm-subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .confirm-body {
+            padding: 25px;
+            color: #555;
+            font-size: 16px;
+            line-height: 1.5;
+        }
+        
+        .confirm-details {
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            border-left: 4px solid #f44336;
+        }
+        
+        .confirm-details strong {
+            color: #c62828;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .confirm-buttons {
+            display: flex;
+            padding: 0 20px 20px;
+            gap: 10px;
+        }
+        
+        .btn-confirm-no {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ddd;
+            background: white;
+            color: #666;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .btn-confirm-yes {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            background: linear-gradient(135deg, #f44336 0%, #c62828 100%);
+            color: white;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(244, 67, 54, 0.3);
+        }
+        
+        .btn-confirm-no:active, .btn-confirm-yes:active {
+            transform: scale(0.95);
+        }
+        
+        /* İstatistikler */
+        .stats {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 15px;
+            display: flex;
+            justify-content: space-around;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+            border-radius: 20px 20px 0 0;
+            z-index: 100;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+        
+        .stat-tutulan { color: #4caf50; }
+        .stat-tutulmayan { color: #f44336; }
+        .stat-toplam { color: #2196f3; }
+        
+        /* Offline Bildirimi */
+        .offline-badge {
+            display: none;
+            position: fixed;
+            top: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #ff9800;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            z-index: 999;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .offline-badge.show {
+            display: block;
+        }
+        
+        /* Senkronizasyon Durumu */
+        .sync-status {
+            position: fixed;
+            top: 60px;
+            right: 10px;
+            background: #4caf50;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: bold;
+            z-index: 998;
+            display: none;
+        }
+        
+        .sync-status.show {
+            display: block;
+        }
+        
+        .sync-status.syncing {
+            background: #ff9800;
+        }
+    </style>
+</head>
+<body>
+    <!-- Offline Bildirimi -->
+    <div class="offline-badge" id="offlineBadge">📴 Çevrimdışı Mod</div>
+    <div class="sync-status" id="syncStatus">☁️ Senkronize edildi</div>
+    
+    <!-- Sabit Banner -->
+    <div class="banner">TAKVİM</div>
+    
+    <!-- Ana İçerik -->
+    <div class="content" id="content"></div>
+    
+    <!-- Ana Modal -->
+    <div class="modal-overlay" id="modal">
+        <div class="modal">
+            <div class="modal-banner" id="modalTitle">2018 - 4. Gün</div>
+            <div class="modal-content">
+                <div class="date-display" id="dateDisplay">Tarih seçilmedi</div>
+                
+                <div class="form-group">
+                    <label for="dateInput">📅 Kayıt Tarihi</label>
+                    <input type="date" id="dateInput">
+                </div>
+                
+                <div class="form-group">
+                    <label for="noteInput">📝 Not / Detay</label>
+                    <textarea id="noteInput" placeholder="Eklemek istediğiniz NOT var ise buraya yazın..."></textarea>
+                </div>
+                
+                <div class="buttons-row">
+                    <button class="btn btn-tamam" onclick="saveData()">✓ Tamam</button>
+                    <button class="btn btn-iptal" onclick="closeModal()">✕ İptal</button>
+                </div>
+                <button class="btn btn-sil" onclick="showDeleteConfirm()">🗑 Sil</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Silme Onay Modal'ı -->
+    <div class="confirm-overlay" id="confirmModal">
+        <div class="confirm-modal">
+            <div class="confirm-header">
+                <div class="confirm-icon">⚠️</div>
+                <div class="confirm-title">Kayıt Silinecek</div>
+                <div class="confirm-subtitle">Bu işlem geri alınamaz</div>
+            </div>
+            <div class="confirm-body">
+                <p>Bu tarih kaydını silmek istediğinize emin misiniz?</p>
+                <div class="confirm-details" id="confirmDetails">
+                    <strong id="confirmYearDay">2018 - 4. Gün</strong>
+                    <span id="confirmDate">3 Mart 2018 Çarşamba</span>
+                </div>
+            </div>
+            <div class="confirm-buttons">
+                <button class="btn-confirm-no" onclick="hideDeleteConfirm()">Vazgeç</button>
+                <button class="btn-confirm-yes" onclick="confirmDelete()">Evet, Sil</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- İstatistikler -->
+    <div class="stats">
+        <div class="stat-item">
+            <span class="stat-value stat-tutulan" id="statTutulan">0</span>
+            <div class="stat-label">KAYDEDİLEN</div>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value stat-tutulmayan" id="statTutulmayan">0</span>
+            <div class="stat-label">KAYDEDİLMEYEN</div>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value stat-toplam" id="statToplam">0</span>
+            <div class="stat-label">TOPLAM</div>
+        </div>
+    </div>
 
+    <script>
+        // PWA Service Worker Kayıt
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js')
+                    .then(registration => {
+                        console.log('SW registered:', registration);
+                    })
+                    .catch(error => {
+                        console.log('SW registration failed:', error);
+                    });
+            });
+        }
+        
+        let fastingData = {};
+        let currentYear = null;
+        let currentDay = null;
+        
+        const gunler = ['Pazar', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi'];
+        const aylar = ['Ocak', 'Şubat', 'Mart', 'Nisan', 'Mayıs', 'Haziran', 
+                       'Temmuz', 'Ağustos', 'Eylül', 'Ekim', 'Kasım', 'Aralık'];
+        
+        function loadData() {
+            const saved = localStorage.getItem('fastingData');
+            if (saved) fastingData = JSON.parse(saved);
+        }
+        
+        function saveToStorage() {
+            localStorage.setItem('fastingData', JSON.stringify(fastingData));
+        }
+        
+        window.onload = function() {
+            loadData();
+            renderYears();
+            updateStats();
+            document.getElementById('dateInput').value = new Date().toISOString().split('T')[0];
+            updateOnlineStatus();
+        };
+        
+        // Çevrimdışı durum kontrolü
+        function updateOnlineStatus() {
+            const offlineBadge = document.getElementById('offlineBadge');
+            if (!navigator.onLine) {
+                offlineBadge.classList.add('show');
+            } else {
+                offlineBadge.classList.remove('show');
+            }
+        }
+        
+        window.addEventListener('online', updateOnlineStatus);
+        window.addEventListener('offline', updateOnlineStatus);
+        
+        function renderYears() {
+            const content = document.getElementById('content');
+            content.innerHTML = '';
+            
+            for (let year = 2013; year <= 2026; year++) {
+                const row = document.createElement('div');
+                row.className = 'year-row';
+                
+                const yearLabel = document.createElement('div');
+                yearLabel.className = 'year-label';
+                yearLabel.textContent = year;
+                
+                const boxesContainer = document.createElement('div');
+                boxesContainer.className = 'boxes-container';
+                
+                for (let day = 1; day <= 6; day++) {
+                    const key = `${year}-${day}`;
+                    const box = document.createElement('div');
+                    box.className = 'day-box';
+                    
+                    if (fastingData[key]) {
+                        box.classList.add('filled');
+                        box.textContent = day;
+                    } else {
+                        box.textContent = day;
+                    }
+                    
+                    box.onclick = () => openModal(year, day);
+                    boxesContainer.appendChild(box);
+                }
+                
+                row.appendChild(yearLabel);
+                row.appendChild(boxesContainer);
+                content.appendChild(row);
+            }
+        }
+        
+        function openModal(year, day) {
+            currentYear = year;
+            currentDay = day;
+            const key = `${year}-${day}`;
+            const data = fastingData[key];
+            
+            document.getElementById('modalTitle').textContent = `${year} - ${day}. Gün`;
+            
+            if (data) {
+                document.getElementById('dateInput').value = data.date;
+                document.getElementById('noteInput').value = data.note || '';
+                updateDateDisplay(data.date);
+            } else {
+                const today = new Date().toISOString().split('T')[0];
+                document.getElementById('dateInput').value = today;
+                document.getElementById('noteInput').value = '';
+                updateDateDisplay(today);
+            }
+            
+            document.getElementById('modal').classList.add('active');
+            
+            document.getElementById('dateInput').onchange = function() {
+                updateDateDisplay(this.value);
+            };
+        }
+        
+        function updateDateDisplay(dateStr) {
+            if (!dateStr) {
+                document.getElementById('dateDisplay').textContent = 'Tarih seçilmedi';
+                return;
+            }
+            const date = new Date(dateStr);
+            const gun = gunler[date.getDay()];
+            const ay = aylar[date.getMonth()];
+            document.getElementById('dateDisplay').textContent = 
+                `${date.getDate()} ${ay} ${date.getFullYear()} ${gun}`;
+        }
+        
+        function closeModal() {
+            document.getElementById('modal').classList.remove('active');
+            currentYear = null;
+            currentDay = null;
+        }
+        
+        function saveData() {
+            const date = document.getElementById('dateInput').value;
+            const note = document.getElementById('noteInput').value.trim();
+            
+            if (!date) {
+                alert('Lütfen bir tarih seçin!');
+                return;
+            }
+            
+            const key = `${currentYear}-${currentDay}`;
+            fastingData[key] = {
+                date: date,
+                note: note,
+                timestamp: new Date().toISOString()
+            };
+            
+            saveToStorage();
+            renderYears();
+            updateStats();
+            closeModal();
+        }
+        
+        function showDeleteConfirm() {
+            const key = `${currentYear}-${currentDay}`;
+            const data = fastingData[key];
+            
+            if (!data) {
+                closeModal();
+                return;
+            }
+            
+            document.getElementById('confirmYearDay').textContent = `${currentYear} - ${currentDay}. Gün`;
+            
+            const date = new Date(data.date);
+            const gun = gunler[date.getDay()];
+            const ay = aylar[date.getMonth()];
+            document.getElementById('confirmDate').textContent = 
+                `${date.getDate()} ${ay} ${date.getFullYear()} ${gun}`;
+            
+            document.getElementById('confirmModal').classList.add('active');
+        }
+        
+        function hideDeleteConfirm() {
+            document.getElementById('confirmModal').classList.remove('active');
+        }
+        
+        function confirmDelete() {
+            const key = `${currentYear}-${currentDay}`;
+            delete fastingData[key];
+            saveToStorage();
+            renderYears();
+            updateStats();
+            hideDeleteConfirm();
+            closeModal();
+        }
+        
+        function updateStats() {
+            const total = 13 * 6;
+            const tutulan = Object.keys(fastingData).length;
+            const tutulmayan = total - tutulan;
+            
+            document.getElementById('statTutulan').textContent = tutulan;
+            document.getElementById('statTutulmayan').textContent = tutulmayan;
+            document.getElementById('statToplam').textContent = total;
+        }
+        
+        document.getElementById('modal').onclick = function(e) {
+            if (e.target === this) closeModal();
+        };
+        
+        document.getElementById('confirmModal').onclick = function(e) {
+            if (e.target === this) hideDeleteConfirm();
+        };
+    </script>
+</body>
+</html>
