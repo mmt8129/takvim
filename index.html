@@ -733,7 +733,8 @@
             const content = document.getElementById('content');
             content.innerHTML = '';
             
-            for (let year = 2026; year >= 2013; year++) {
+            for (let year = 2026; year >= 2013; year--) {
+
                 const row = document.createElement('div');
                 row.className = 'year-row';
                 
