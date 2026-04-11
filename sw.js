@@ -1,10 +1,10 @@
 const CACHE_NAME = 'takvim-v2';
 const urlsToCache = [
-  './',
-  './index.html',
-  './manifest.json',
-  './icon-192.png',
-  './icon-512.png'
+  '/takvim',
+  '/takvim/index.html',
+  '/takvim/manifest.json',
+  '/takvim/icon-192.png',
+  '/takvim/icon-512.png'
 ];
 
 self.addEventListener('install', event => {
